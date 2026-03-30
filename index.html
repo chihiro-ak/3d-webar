@@ -82,31 +82,11 @@
       box-shadow: 0 14px 28px rgba(255, 147, 72, 0.24);
     }
 
-    .hint {
-      position: absolute;
-      top: calc(16px + env(safe-area-inset-top, 0px));
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 5;
-      width: min(92vw, 420px);
-      padding: 10px 14px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(20, 14, 10, 0.48);
-      color: rgba(248, 242, 235, 0.82);
-      backdrop-filter: blur(12px);
-      box-shadow: var(--shadow);
-      text-align: center;
-      font-size: 0.84rem;
-      line-height: 1.6;
-      pointer-events: none;
-    }
   </style>
 </head>
 <body>
   <div class="app">
     <div class="surface" aria-hidden="true"></div>
-    <div class="hint" id="hintText">iPhoneでは「ARで見る」を押すと純正ARが開きます。</div>
     <model-viewer
       id="viewer"
       src="./model.glb"
@@ -131,24 +111,5 @@
     </model-viewer>
     <div class="cta-wrap" aria-hidden="true"></div>
   </div>
-
-  <script>
-    const hintText = document.getElementById("hintText");
-
-    function updateHint() {
-      const ua = navigator.userAgent || "";
-      if (/iPhone|iPad|iPod/i.test(ua)) {
-        hintText.textContent = "iPhoneでは「ARで見る」を押すと純正AR Quick Lookが開きます。";
-        return;
-      }
-      if (/Android/i.test(ua)) {
-        hintText.textContent = "Androidでは「ARで見る」で対応ARビューアを開きます。";
-        return;
-      }
-      hintText.textContent = "このページはスマホ向けです。対応端末では「ARで見る」でARを開けます。";
-    }
-
-    updateHint();
-  </script>
 </body>
 </html>
