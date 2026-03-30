@@ -3,21 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>アクキー・アクスタ カメラARプレビュー</title>
+  <title>アクキー・アクスタ 空間ARプレビュー</title>
   <meta
     name="description"
-    content="ページを開くとカメラを起動し、固定3Dモデルを映像の上に重ねて雰囲気を確認できる静的アプリです。"
+    content="対応端末では床検出と空間固定つきのWebXR AR、非対応環境ではカメラ重ね表示で確認できる静的アプリです。"
   />
   <link rel="icon" href="data:," />
-  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.1/build/three.module.js"
+      }
+    }
+  </script>
+  <script type="module" src="./app.js"></script>
   <style>
     :root {
-      --text: #f7f2eb;
-      --muted: rgba(247, 242, 235, 0.78);
-      --panel: rgba(21, 16, 12, 0.46);
-      --panel-strong: rgba(18, 14, 10, 0.66);
-      --line: rgba(255, 220, 181, 0.18);
+      --text: #f8f3ec;
+      --muted: rgba(248, 243, 236, 0.78);
+      --panel: rgba(20, 14, 10, 0.52);
+      --panel-strong: rgba(17, 12, 9, 0.72);
+      --line: rgba(255, 219, 183, 0.18);
       --accent: #ff9a56;
+      --accent-2: #ffd2b1;
       --shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
     }
 
@@ -33,7 +41,7 @@
     body {
       margin: 0;
       overflow: hidden;
-      background: #140f0b;
+      background: #130f0b;
       color: var(--text);
       font-family: "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
     }
@@ -44,13 +52,14 @@
       height: 100vh;
       overflow: hidden;
       background:
-        radial-gradient(circle at top, rgba(255, 154, 86, 0.18), transparent 35%),
-        #140f0b;
+        radial-gradient(circle at top, rgba(255, 154, 86, 0.16), transparent 35%),
+        #130f0b;
     }
 
     .camera-layer,
     .camera-layer video,
-    .camera-fallback {
+    .camera-fallback,
+    #xrCanvas {
       position: absolute;
       inset: 0;
       width: 100%;
@@ -59,7 +68,7 @@
 
     .camera-layer video {
       object-fit: cover;
-      background: #0f0b08;
+      background: #0d0a08;
       transform: scaleX(-1);
     }
 
@@ -73,23 +82,23 @@
       padding: 24px;
       text-align: center;
       background:
-        linear-gradient(180deg, rgba(20, 15, 11, 0.3), rgba(20, 15, 11, 0.82)),
+        linear-gradient(180deg, rgba(19, 15, 11, 0.3), rgba(19, 15, 11, 0.82)),
         radial-gradient(circle at 50% 40%, rgba(255, 154, 86, 0.22), transparent 32%);
     }
 
     .fallback-card {
-      width: min(520px, 100%);
-      padding: 22px;
+      width: min(560px, 100%);
+      padding: 24px;
       border-radius: 28px;
-      background: rgba(17, 13, 10, 0.64);
+      background: rgba(17, 13, 10, 0.66);
       border: 1px solid var(--line);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(16px);
+      backdrop-filter: blur(18px);
     }
 
     .fallback-card h1 {
       margin: 0 0 10px;
-      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      font-size: clamp(1.9rem, 4vw, 2.7rem);
       line-height: 1.1;
     }
 
@@ -99,7 +108,7 @@
       line-height: 1.7;
     }
 
-    .overlay-scene {
+    .overlay-preview {
       position: absolute;
       inset: 0;
       pointer-events: none;
@@ -109,18 +118,33 @@
       position: absolute;
       left: 50%;
       top: 50%;
-      width: min(64vw, 430px);
+      width: min(58vw, 360px);
       aspect-ratio: 1 / 1;
       transform: translate3d(-50%, -50%, 0);
       pointer-events: auto;
-      filter: drop-shadow(0 24px 42px rgba(0, 0, 0, 0.3));
+      filter: drop-shadow(0 24px 42px rgba(0, 0, 0, 0.28));
     }
 
-    model-viewer {
+    #previewCanvas {
       width: 100%;
       height: 100%;
       background: transparent;
-      --poster-color: transparent;
+    }
+
+    #xrCanvas {
+      z-index: 5;
+      display: none;
+      pointer-events: none;
+    }
+
+    .app.xr-active #xrCanvas {
+      display: block;
+      pointer-events: auto;
+    }
+
+    .app.xr-active .camera-layer,
+    .app.xr-active .overlay-preview {
+      display: none;
     }
 
     .top-ui {
@@ -136,7 +160,7 @@
     }
 
     .brand,
-    .status {
+    .status-stack {
       pointer-events: auto;
       padding: 12px 14px;
       border-radius: 18px;
@@ -147,7 +171,7 @@
     }
 
     .brand {
-      max-width: min(540px, calc(100vw - 32px));
+      max-width: min(640px, calc(100vw - 32px));
     }
 
     .eyebrow {
@@ -156,21 +180,35 @@
       font-size: 0.72rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: #ffc89e;
+      color: var(--accent-2);
       font-weight: 700;
     }
 
     .brand strong {
       display: block;
-      font-size: 1.15rem;
+      font-size: 1.18rem;
       margin-bottom: 6px;
     }
 
     .brand span,
-    .status {
+    .status-line {
       color: var(--muted);
       font-size: 0.86rem;
       line-height: 1.6;
+    }
+
+    .status-stack {
+      min-width: min(320px, calc(100vw - 32px));
+      display: grid;
+      gap: 4px;
+    }
+
+    .status-k {
+      color: var(--accent-2);
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
     }
 
     .bottom-sheet {
@@ -242,10 +280,25 @@
       color: var(--text);
     }
 
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+      box-shadow: none;
+    }
+
     .note {
       color: var(--muted);
       font-size: 0.76rem;
       line-height: 1.7;
+    }
+
+    .app.xr-active #startArButton {
+      display: none;
+    }
+
+    .app:not(.xr-active) #endArButton,
+    .app:not(.xr-active) #resetPlacementButton {
+      display: none;
     }
 
     @media (max-width: 920px) {
@@ -268,219 +321,85 @@
       }
 
       .model-anchor {
-        width: min(74vw, 380px);
+        width: min(70vw, 330px);
       }
     }
   </style>
 </head>
 <body>
-  <div class="app">
+  <div class="app" id="appRoot">
     <div class="camera-layer" id="cameraLayer" data-facing="environment">
       <video id="camera" autoplay playsinline muted></video>
       <div class="camera-fallback" id="cameraFallback">
         <div class="fallback-card">
           <h1>カメラを準備しています</h1>
           <p id="fallbackMessage">
-            ページを開くとカメラを起動し、その映像の上に固定3Dモデルを重ねて表示します。
-            許可ダイアログが出たらカメラアクセスを許可してください。
+            カメラを起動してプレビューを表示します。対応端末では下のボタンから床検出つきの空間ARも開始できます。
           </p>
         </div>
       </div>
     </div>
 
-    <div class="overlay-scene">
+    <div class="overlay-preview">
       <div class="model-anchor" id="modelAnchor">
-        <model-viewer
-          id="viewer"
-          src="./model.glb"
-          alt="アクキー・アクスタ向け固定3Dモデル"
-          interaction-prompt="none"
-          exposure="1"
-          shadow-intensity="0"
-          environment-image="neutral"
-          camera-orbit="0deg 75deg auto"
-          disable-zoom>
-        </model-viewer>
+        <canvas id="previewCanvas" aria-label="アクキー・アクスタ向け固定3Dモデル"></canvas>
       </div>
     </div>
 
+    <canvas id="xrCanvas"></canvas>
+
     <div class="top-ui">
       <div class="brand">
-        <span class="eyebrow">Camera Preview</span>
-        <strong>アクキー・アクスタ カメラARプレビュー</strong>
-        <span>ページアクセス時にカメラを起動し、固定モデルを映像の上に重ねて雰囲気を確認します。</span>
+        <span class="eyebrow">Spatial AR Preview</span>
+        <strong>アクキー・アクスタ 空間ARプレビュー</strong>
+        <span>WebXR対応端末では床を検出して空間に配置し、非対応環境ではカメラ重ね表示で雰囲気を確認できます。</span>
       </div>
-      <div class="status" id="statusText">カメラ起動待ち</div>
+
+      <div class="status-stack">
+        <div class="status-k">Mode</div>
+        <div class="status-line" id="modeText">カメラ重ね表示</div>
+        <div class="status-k">Tracking</div>
+        <div class="status-line" id="trackingText">空間AR対応を確認中</div>
+        <div class="status-k">Placement</div>
+        <div class="status-line" id="placementText">まだ配置していません</div>
+      </div>
     </div>
 
     <div class="bottom-sheet">
       <div class="controls">
         <div class="field">
-          <label for="sizeRange">モデルサイズ</label>
-          <input id="sizeRange" type="range" min="140" max="520" step="1" value="260" />
-          <output id="sizeValue">260 px</output>
+          <label for="heightRange">実寸の高さ</label>
+          <input id="heightRange" type="range" min="5" max="30" step="0.5" value="15" />
+          <output id="heightValue">15.0 cm</output>
         </div>
         <div class="field">
-          <label for="heightRange">上下位置</label>
-          <input id="heightRange" type="range" min="-220" max="220" step="1" value="18" />
-          <output id="heightValue">18 px</output>
+          <label for="previewSizeRange">重ね表示の見た目サイズ</label>
+          <input id="previewSizeRange" type="range" min="180" max="420" step="1" value="280" />
+          <output id="previewSizeValue">280 px</output>
         </div>
         <div class="field">
-          <label for="yawRange">見せる角度</label>
-          <input id="yawRange" type="range" min="-180" max="180" step="1" value="0" />
-          <output id="yawValue">0°</output>
+          <label for="angleRange">見せる角度</label>
+          <input id="angleRange" type="range" min="-180" max="180" step="1" value="0" />
+          <output id="angleValue">0°</output>
         </div>
         <div class="field">
-          <label for="spinRange">自動回転</label>
-          <input id="spinRange" type="range" min="0" max="40" step="1" value="10" />
-          <output id="spinValue">10°/s</output>
+          <label for="spinRange">回転速度</label>
+          <input id="spinRange" type="range" min="0" max="16" step="1" value="0" />
+          <output id="spinValue">0°/s</output>
         </div>
       </div>
+
       <div class="actions">
-        <button id="retryCamera">カメラを再起動</button>
-        <button class="secondary" id="flipCamera">背面/前面を切替</button>
-        <button class="secondary" id="centerModel">位置を中央に戻す</button>
+        <button id="startArButton" disabled>空間ARを開始</button>
+        <button id="endArButton" class="secondary">空間ARを終了</button>
+        <button id="resetPlacementButton" class="secondary">配置をリセット</button>
+        <button id="flipCameraButton" class="secondary">背面/前面を切替</button>
       </div>
+
       <div class="note">
-        この方式はカメラ映像への重ね表示です。床検出や空間固定までは行わないため、実寸の最終確認は WebXR / Scene Viewer / Quick Look の端末ARで行うのがおすすめです。
+        WebXR の空間ARは HTTPS と対応端末が必要です。AR中は床にスマホを向けてゆっくり動かし、配置ガイドが出たらタップして固定します。
       </div>
     </div>
   </div>
-
-  <script>
-    const camera = document.getElementById("camera");
-    const cameraLayer = document.getElementById("cameraLayer");
-    const cameraFallback = document.getElementById("cameraFallback");
-    const fallbackMessage = document.getElementById("fallbackMessage");
-    const statusText = document.getElementById("statusText");
-    const viewer = document.getElementById("viewer");
-    const modelAnchor = document.getElementById("modelAnchor");
-    const sizeRange = document.getElementById("sizeRange");
-    const sizeValue = document.getElementById("sizeValue");
-    const heightRange = document.getElementById("heightRange");
-    const heightValue = document.getElementById("heightValue");
-    const yawRange = document.getElementById("yawRange");
-    const yawValue = document.getElementById("yawValue");
-    const spinRange = document.getElementById("spinRange");
-    const spinValue = document.getElementById("spinValue");
-    const retryCamera = document.getElementById("retryCamera");
-    const flipCamera = document.getElementById("flipCamera");
-    const centerModel = document.getElementById("centerModel");
-
-    let currentFacingMode = "environment";
-    let cameraStream = null;
-
-    function setStatus(message) {
-      statusText.textContent = message;
-    }
-
-    function stopCamera() {
-      if (!cameraStream) {
-        return;
-      }
-
-      for (const track of cameraStream.getTracks()) {
-        track.stop();
-      }
-
-      cameraStream = null;
-    }
-
-    async function startCamera() {
-      stopCamera();
-      setStatus("カメラを起動しています");
-      cameraFallback.hidden = false;
-      fallbackMessage.textContent =
-        "カメラを起動中です。許可ダイアログが出たらアクセスを許可してください。";
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setStatus("このブラウザではカメラを使えません");
-        fallbackMessage.textContent =
-          "このブラウザまたは環境では getUserMedia が使えません。HTTPS または localhost で開いてください。";
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: currentFacingMode },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        });
-
-        camera.srcObject = stream;
-        cameraStream = stream;
-        cameraLayer.dataset.facing = currentFacingMode;
-        cameraFallback.hidden = true;
-        setStatus(currentFacingMode === "environment" ? "背面カメラ表示中" : "前面カメラ表示中");
-      } catch (error) {
-        const message = error && error.name ? error.name : "CameraError";
-        setStatus("カメラを起動できませんでした");
-        fallbackMessage.textContent =
-          `カメラアクセスに失敗しました (${message})。ブラウザ設定でカメラを許可してから再試行してください。`;
-      }
-    }
-
-    function applyOverlayControls() {
-      const size = Number(sizeRange.value);
-      const offsetY = Number(heightRange.value);
-      const yaw = Number(yawRange.value);
-      const spin = Number(spinRange.value);
-
-      modelAnchor.style.width = `${size}px`;
-      modelAnchor.style.transform = `translate3d(-50%, calc(-50% + ${offsetY}px), 0)`;
-      viewer.cameraOrbit = `${yaw}deg 75deg auto`;
-
-      if (spin > 0) {
-        viewer.setAttribute("auto-rotate", "");
-        viewer.setAttribute("rotation-per-second", `${spin}deg`);
-      } else {
-        viewer.removeAttribute("auto-rotate");
-      }
-
-      sizeValue.textContent = `${size}px`;
-      heightValue.textContent = `${offsetY}px`;
-      yawValue.textContent = `${yaw}°`;
-      spinValue.textContent = `${spin}°/s`;
-    }
-
-    function resetOverlayPosition() {
-      sizeRange.value = "260";
-      heightRange.value = "18";
-      yawRange.value = "0";
-      spinRange.value = "10";
-      applyOverlayControls();
-    }
-
-    retryCamera.addEventListener("click", startCamera);
-    flipCamera.addEventListener("click", async () => {
-      currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
-      await startCamera();
-    });
-    centerModel.addEventListener("click", resetOverlayPosition);
-
-    sizeRange.addEventListener("input", applyOverlayControls);
-    heightRange.addEventListener("input", applyOverlayControls);
-    yawRange.addEventListener("input", applyOverlayControls);
-    spinRange.addEventListener("input", applyOverlayControls);
-
-    viewer.addEventListener("load", () => {
-      setStatus(`${statusText.textContent} / モデル読込完了`);
-    });
-
-    viewer.addEventListener("error", () => {
-      setStatus("モデルの読み込みに失敗しました");
-      fallbackMessage.textContent =
-        "固定3Dモデルの読み込みに失敗しました。`model.glb` が同じ場所にあるか確認してください。";
-      cameraFallback.hidden = false;
-    });
-
-    applyOverlayControls();
-    startCamera();
-
-    window.addEventListener("beforeunload", stopCamera);
-  </script>
 </body>
 </html>
