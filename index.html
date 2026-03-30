@@ -2,571 +2,485 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>アクキー・アクスタ AR プレビュー</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>アクキー・アクスタ カメラARプレビュー</title>
   <meta
     name="description"
-    content="3Dモデルを実寸スケールで確認し、対応端末ではARで部屋に試し置きできる静的ビューアです。"
+    content="ページを開くとカメラを起動し、固定3Dモデルを映像の上に重ねて雰囲気を確認できる静的アプリです。"
   />
   <link rel="icon" href="data:," />
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
     :root {
-      --bg: #fffaf3;
-      --panel: rgba(255, 252, 247, 0.88);
-      --panel-strong: rgba(255, 255, 255, 0.96);
-      --text: #2b2621;
-      --muted: #6d6258;
-      --line: rgba(194, 124, 74, 0.18);
-      --accent: #d66c37;
-      --accent-soft: #f4d6bf;
-      --shadow: 0 18px 45px rgba(94, 60, 29, 0.12);
-      --radius: 24px;
+      --text: #f7f2eb;
+      --muted: rgba(247, 242, 235, 0.78);
+      --panel: rgba(21, 16, 12, 0.46);
+      --panel-strong: rgba(18, 14, 10, 0.66);
+      --line: rgba(255, 220, 181, 0.18);
+      --accent: #ff9a56;
+      --shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
     }
 
     * {
       box-sizing: border-box;
     }
 
+    html,
+    body {
+      height: 100%;
+    }
+
     body {
       margin: 0;
+      overflow: hidden;
+      background: #140f0b;
       color: var(--text);
       font-family: "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
-      min-height: 100vh;
+    }
+
+    .app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
       background:
-        radial-gradient(circle at top left, rgba(255, 214, 183, 0.65), transparent 28%),
-        radial-gradient(circle at bottom right, rgba(255, 231, 196, 0.55), transparent 24%),
-        linear-gradient(180deg, #fff9f3 0%, #fffdf9 100%);
+        radial-gradient(circle at top, rgba(255, 154, 86, 0.18), transparent 35%),
+        #140f0b;
     }
 
-    .shell {
-      min-height: 100vh;
+    .camera-layer,
+    .camera-layer video,
+    .camera-fallback {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .camera-layer video {
+      object-fit: cover;
+      background: #0f0b08;
+      transform: scaleX(-1);
+    }
+
+    .camera-layer[data-facing="environment"] video {
+      transform: none;
+    }
+
+    .camera-fallback {
       display: grid;
-      grid-template-columns: minmax(320px, 400px) 1fr;
-      gap: 18px;
-      padding: 18px;
+      place-items: center;
+      padding: 24px;
+      text-align: center;
+      background:
+        linear-gradient(180deg, rgba(20, 15, 11, 0.3), rgba(20, 15, 11, 0.82)),
+        radial-gradient(circle at 50% 40%, rgba(255, 154, 86, 0.22), transparent 32%);
     }
 
-    .panel {
-      background: var(--panel);
+    .fallback-card {
+      width: min(520px, 100%);
+      padding: 22px;
+      border-radius: 28px;
+      background: rgba(17, 13, 10, 0.64);
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      backdrop-filter: blur(16px);
       box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
     }
 
-    .sidebar {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      padding: 20px;
-      align-self: start;
+    .fallback-card h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      line-height: 1.1;
     }
 
-    .hero {
-      display: grid;
-      gap: 8px;
-    }
-
-    .eyebrow {
-      margin: 0;
-      font-size: 0.78rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--accent);
-      font-weight: 700;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(1.7rem, 2vw, 2.2rem);
-      line-height: 1.15;
-    }
-
-    .lead {
+    .fallback-card p {
       margin: 0;
       color: var(--muted);
       line-height: 1.7;
-      font-size: 0.95rem;
     }
 
-    .card {
-      display: grid;
-      gap: 10px;
-      padding: 14px;
+    .overlay-scene {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .model-anchor {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: min(64vw, 430px);
+      aspect-ratio: 1 / 1;
+      transform: translate3d(-50%, -50%, 0);
+      pointer-events: auto;
+      filter: drop-shadow(0 24px 42px rgba(0, 0, 0, 0.3));
+    }
+
+    model-viewer {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      --poster-color: transparent;
+    }
+
+    .top-ui {
+      position: absolute;
+      inset: env(safe-area-inset-top, 0) 0 auto 0;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      pointer-events: none;
+    }
+
+    .brand,
+    .status {
+      pointer-events: auto;
+      padding: 12px 14px;
       border-radius: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .brand {
+      max-width: min(540px, calc(100vw - 32px));
+    }
+
+    .eyebrow {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #ffc89e;
+      font-weight: 700;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 1.15rem;
+      margin-bottom: 6px;
+    }
+
+    .brand span,
+    .status {
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.6;
+    }
+
+    .bottom-sheet {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 24px;
       background: var(--panel-strong);
       border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(20px);
     }
 
-    .card h2 {
-      margin: 0;
-      font-size: 0.98rem;
-    }
-
-    .caption {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.84rem;
-      line-height: 1.6;
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      align-items: end;
     }
 
     .field {
       display: grid;
-      gap: 6px;
+      gap: 7px;
+    }
+
+    .field label {
       color: var(--muted);
-      font-size: 0.88rem;
+      font-size: 0.8rem;
     }
 
-    input[type="number"],
-    input[type="file"],
-    select,
-    button {
-      width: 100%;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      padding: 12px 14px;
-      font: inherit;
-      background: #fff;
-      color: var(--text);
-    }
-
-    button {
-      cursor: pointer;
-      border: none;
-      color: #fff;
+    .field output {
+      color: #fff0e6;
       font-weight: 700;
-      background: linear-gradient(180deg, #e7884c 0%, #d66c37 100%);
-      box-shadow: 0 10px 24px rgba(214, 108, 55, 0.28);
+      font-size: 0.98rem;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 16px;
+      font: inherit;
+      font-weight: 700;
+      color: #fff;
+      cursor: pointer;
+      background: linear-gradient(180deg, #ffb075 0%, #ff8c43 100%);
+      box-shadow: 0 12px 24px rgba(255, 140, 67, 0.22);
     }
 
     button.secondary {
-      background: #fff;
+      background: rgba(255, 255, 255, 0.08);
       border: 1px solid var(--line);
       box-shadow: none;
       color: var(--text);
     }
 
-    .button-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-
-    .stat {
-      padding: 12px;
-      border-radius: 16px;
-      background: #fff;
-      border: 1px solid var(--line);
-    }
-
-    .stat .k {
-      display: block;
+    .note {
+      color: var(--muted);
       font-size: 0.76rem;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-
-    .stat .v {
-      font-size: 1rem;
-      font-weight: 700;
-    }
-
-    .chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .chip {
-      border-radius: 999px;
-      padding: 7px 12px;
-      background: rgba(244, 214, 191, 0.55);
-      border: 1px solid rgba(214, 108, 55, 0.12);
-      color: #6f4a31;
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-
-    .viewer-panel {
-      position: relative;
-      overflow: hidden;
-      min-height: calc(100vh - 36px);
-      background:
-        radial-gradient(circle at 50% 78%, rgba(255, 211, 182, 0.38), transparent 22%),
-        linear-gradient(180deg, #fffdf9 0%, #fff7ef 100%);
-    }
-
-    .viewer-overlay {
-      position: absolute;
-      inset: 16px 16px auto 16px;
-      z-index: 2;
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      pointer-events: none;
-    }
-
-    .pill {
-      pointer-events: auto;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.86);
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow);
-      color: var(--muted);
-      font-size: 0.84rem;
-      backdrop-filter: blur(10px);
-    }
-
-    model-viewer {
-      width: 100%;
-      height: calc(100vh - 36px);
-      --poster-color: transparent;
-      background: transparent;
-    }
-
-    #ar-button {
-      border-radius: 999px;
-      padding: 12px 18px;
-      font-weight: 800;
-      color: #fff;
-      background: linear-gradient(180deg, #e7884c 0%, #d66c37 100%);
-      box-shadow: 0 10px 24px rgba(214, 108, 55, 0.28);
-      border: none;
-    }
-
-    .footer-note {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.8rem;
       line-height: 1.7;
     }
 
-    @media (max-width: 980px) {
-      .shell {
-        grid-template-columns: 1fr;
+    @media (max-width: 920px) {
+      .controls {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      .viewer-panel,
-      model-viewer {
-        min-height: 62vh;
-        height: 62vh;
-      }
-
-      .viewer-overlay {
-        flex-direction: column;
-        align-items: flex-start;
+      .brand strong {
+        font-size: 1rem;
       }
     }
 
-    @media (max-width: 640px) {
-      .button-row,
-      .stats {
+    @media (max-width: 560px) {
+      .top-ui {
+        flex-direction: column;
+      }
+
+      .controls {
         grid-template-columns: 1fr;
+      }
+
+      .model-anchor {
+        width: min(74vw, 380px);
       }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <aside class="panel sidebar">
-      <header class="hero">
-        <p class="eyebrow">AR Preview</p>
-        <h1>アクキー・アクスタ AR プレビュー</h1>
-        <p class="lead">
-          3Dモデルのサイズ感を実寸で確認し、対応端末ではARで机や部屋に試し置きできます。
-          GitHub Pages でもそのまま動く静的アプリです。
-        </p>
-      </header>
-
-      <section class="card">
-        <h2>モデル</h2>
-        <p class="caption">同梱サンプルを表示中です。手元のGLB/GLTFを選ぶと、その場で差し替えて確認できます。</p>
-        <label class="field">
-          3Dファイルを選択
-          <input id="fileInput" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" />
-        </label>
-        <div class="button-row">
-          <button class="secondary" id="useSample">サンプルに戻す</button>
-          <button class="secondary" id="copyUrl">現在URLをコピー</button>
+  <div class="app">
+    <div class="camera-layer" id="cameraLayer" data-facing="environment">
+      <video id="camera" autoplay playsinline muted></video>
+      <div class="camera-fallback" id="cameraFallback">
+        <div class="fallback-card">
+          <h1>カメラを準備しています</h1>
+          <p id="fallbackMessage">
+            ページを開くとカメラを起動し、その映像の上に固定3Dモデルを重ねて表示します。
+            許可ダイアログが出たらカメラアクセスを許可してください。
+          </p>
         </div>
-        <div class="chips">
-          <span class="chip" id="modelName">sample: model.glb</span>
-          <span class="chip" id="sourceType">同梱モデル</span>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>サイズ調整</h2>
-        <label class="field">
-          目標の高さ（cm）
-          <input id="heightCm" type="number" min="1" max="300" step="0.1" value="15" />
-        </label>
-        <div class="button-row">
-          <button id="applyScale">実寸に合わせる</button>
-          <button class="secondary" id="fitToModel">元サイズに戻す</button>
-        </div>
-        <p class="caption" id="scaleHint">
-          読み込み後のモデル高さを基準にスケール計算します。アクスタなら 10cm - 20cm 付近の確認がおすすめです。
-        </p>
-      </section>
-
-      <section class="card">
-        <h2>表示設定</h2>
-        <label class="field">
-          ライティング
-          <select id="envSelect">
-            <option value="neutral">標準</option>
-            <option value="legacy">やや明るめ</option>
-          </select>
-        </label>
-        <label class="field">
-          自動回転
-          <select id="rotateSelect">
-            <option value="on">ON</option>
-            <option value="off">OFF</option>
-          </select>
-        </label>
-        <div class="button-row">
-          <button class="secondary" id="resetCamera">カメラを戻す</button>
-          <button class="secondary" id="togglePoster">影を弱くする</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>現在の寸法</h2>
-        <div class="stats">
-          <div class="stat"><span class="k">元モデル高</span><span class="v" id="baseHeight">-</span></div>
-          <div class="stat"><span class="k">現在スケール</span><span class="v" id="scaleValue">-</span></div>
-          <div class="stat"><span class="k">高さ</span><span class="v" id="curHeight">-</span></div>
-          <div class="stat"><span class="k">横幅</span><span class="v" id="curWidth">-</span></div>
-          <div class="stat"><span class="k">奥行</span><span class="v" id="curDepth">-</span></div>
-          <div class="stat"><span class="k">AR</span><span class="v" id="arStatus">判定中</span></div>
-        </div>
-      </section>
-
-      <p class="footer-note">
-        Android は WebXR / Scene Viewer、iPhone は Quick Look に対応します。Quick Look は
-        `ios-src` 未指定時にその場で USDZ を自動生成するため、静的配信でも試しやすい構成です。
-      </p>
-    </aside>
-
-    <main class="panel viewer-panel">
-      <div class="viewer-overlay">
-        <div class="pill">ピンチで拡大・ドラッグで回転</div>
-        <div class="pill" id="statusPill">モデル読み込み待ち</div>
       </div>
-      <model-viewer
-        id="viewer"
-        src="./model.glb"
-        alt="アクキー・アクスタ向け3Dモデル"
-        ar
-        ar-modes="webxr scene-viewer quick-look"
-        ar-scale="fixed"
-        camera-controls
-        shadow-intensity="1"
-        exposure="1"
-        environment-image="neutral"
-        camera-orbit="0deg 75deg auto"
-        min-camera-orbit="auto auto 40%"
-        max-camera-orbit="auto auto 400%"
-        auto-rotate
-        auto-rotate-delay="0"
-        rotation-per-second="18deg"
-        interaction-prompt="auto"
-        touch-action="pan-y">
-        <button slot="ar-button" id="ar-button">ARで置いてみる</button>
-      </model-viewer>
-    </main>
+    </div>
+
+    <div class="overlay-scene">
+      <div class="model-anchor" id="modelAnchor">
+        <model-viewer
+          id="viewer"
+          src="./model.glb"
+          alt="アクキー・アクスタ向け固定3Dモデル"
+          interaction-prompt="none"
+          exposure="1"
+          shadow-intensity="0"
+          environment-image="neutral"
+          camera-orbit="0deg 75deg auto"
+          disable-zoom>
+        </model-viewer>
+      </div>
+    </div>
+
+    <div class="top-ui">
+      <div class="brand">
+        <span class="eyebrow">Camera Preview</span>
+        <strong>アクキー・アクスタ カメラARプレビュー</strong>
+        <span>ページアクセス時にカメラを起動し、固定モデルを映像の上に重ねて雰囲気を確認します。</span>
+      </div>
+      <div class="status" id="statusText">カメラ起動待ち</div>
+    </div>
+
+    <div class="bottom-sheet">
+      <div class="controls">
+        <div class="field">
+          <label for="sizeRange">モデルサイズ</label>
+          <input id="sizeRange" type="range" min="140" max="520" step="1" value="260" />
+          <output id="sizeValue">260 px</output>
+        </div>
+        <div class="field">
+          <label for="heightRange">上下位置</label>
+          <input id="heightRange" type="range" min="-220" max="220" step="1" value="18" />
+          <output id="heightValue">18 px</output>
+        </div>
+        <div class="field">
+          <label for="yawRange">見せる角度</label>
+          <input id="yawRange" type="range" min="-180" max="180" step="1" value="0" />
+          <output id="yawValue">0°</output>
+        </div>
+        <div class="field">
+          <label for="spinRange">自動回転</label>
+          <input id="spinRange" type="range" min="0" max="40" step="1" value="10" />
+          <output id="spinValue">10°/s</output>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="retryCamera">カメラを再起動</button>
+        <button class="secondary" id="flipCamera">背面/前面を切替</button>
+        <button class="secondary" id="centerModel">位置を中央に戻す</button>
+      </div>
+      <div class="note">
+        この方式はカメラ映像への重ね表示です。床検出や空間固定までは行わないため、実寸の最終確認は WebXR / Scene Viewer / Quick Look の端末ARで行うのがおすすめです。
+      </div>
+    </div>
   </div>
 
   <script>
-    const DEFAULT_MODEL = "./model.glb";
-    const FALLBACK_DIMS = { width: 52.9467, height: 119.844, depth: 21.3338 };
-
+    const camera = document.getElementById("camera");
+    const cameraLayer = document.getElementById("cameraLayer");
+    const cameraFallback = document.getElementById("cameraFallback");
+    const fallbackMessage = document.getElementById("fallbackMessage");
+    const statusText = document.getElementById("statusText");
     const viewer = document.getElementById("viewer");
-    const fileInput = document.getElementById("fileInput");
-    const useSample = document.getElementById("useSample");
-    const copyUrl = document.getElementById("copyUrl");
-    const modelName = document.getElementById("modelName");
-    const sourceType = document.getElementById("sourceType");
-    const heightCm = document.getElementById("heightCm");
-    const applyScaleBtn = document.getElementById("applyScale");
-    const fitToModelBtn = document.getElementById("fitToModel");
-    const envSelect = document.getElementById("envSelect");
-    const rotateSelect = document.getElementById("rotateSelect");
-    const resetCamera = document.getElementById("resetCamera");
-    const togglePoster = document.getElementById("togglePoster");
-    const baseHeight = document.getElementById("baseHeight");
-    const scaleValue = document.getElementById("scaleValue");
-    const curHeight = document.getElementById("curHeight");
-    const curWidth = document.getElementById("curWidth");
-    const curDepth = document.getElementById("curDepth");
-    const arStatus = document.getElementById("arStatus");
-    const scaleHint = document.getElementById("scaleHint");
-    const statusPill = document.getElementById("statusPill");
+    const modelAnchor = document.getElementById("modelAnchor");
+    const sizeRange = document.getElementById("sizeRange");
+    const sizeValue = document.getElementById("sizeValue");
+    const heightRange = document.getElementById("heightRange");
+    const heightValue = document.getElementById("heightValue");
+    const yawRange = document.getElementById("yawRange");
+    const yawValue = document.getElementById("yawValue");
+    const spinRange = document.getElementById("spinRange");
+    const spinValue = document.getElementById("spinValue");
+    const retryCamera = document.getElementById("retryCamera");
+    const flipCamera = document.getElementById("flipCamera");
+    const centerModel = document.getElementById("centerModel");
 
-    let currentDims = { ...FALLBACK_DIMS };
-    let currentObjectUrl = null;
-    let shadowSoft = false;
-
-    function formatCm(value) {
-      return `${Number(value).toFixed(1)} cm`;
-    }
+    let currentFacingMode = "environment";
+    let cameraStream = null;
 
     function setStatus(message) {
-      statusPill.textContent = message;
+      statusText.textContent = message;
     }
 
-    function updateDimensionCards(ratio) {
-      baseHeight.textContent = formatCm(currentDims.height);
-      scaleValue.textContent = `${(ratio * 100).toFixed(1)}%`;
-      curHeight.textContent = formatCm(currentDims.height * ratio);
-      curWidth.textContent = formatCm(currentDims.width * ratio);
-      curDepth.textContent = formatCm(currentDims.depth * ratio);
-      scaleHint.textContent =
-        `読み込みモデルの高さ ${formatCm(currentDims.height)} を基準に、現在は ${(ratio * 100).toFixed(1)}% のスケールです。`;
-    }
-
-    function applyScale(targetHeight = Number(heightCm.value) || 15) {
-      const safeHeight = Math.max(1, targetHeight);
-      heightCm.value = safeHeight;
-      const ratio = safeHeight / currentDims.height;
-      viewer.scale = `${ratio} ${ratio} ${ratio}`;
-      updateDimensionCards(ratio);
-    }
-
-    function resetToOriginalSize() {
-      heightCm.value = currentDims.height.toFixed(1);
-      applyScale(currentDims.height);
-    }
-
-    function updateArStatus() {
-      const ua = navigator.userAgent || "";
-      if (/iPhone|iPad|iPod/i.test(ua)) {
-        arStatus.textContent = "iPhone Quick Look";
+    function stopCamera() {
+      if (!cameraStream) {
         return;
       }
-      if (/Android/i.test(ua)) {
-        arStatus.textContent = "Android WebXR";
+
+      for (const track of cameraStream.getTracks()) {
+        track.stop();
+      }
+
+      cameraStream = null;
+    }
+
+    async function startCamera() {
+      stopCamera();
+      setStatus("カメラを起動しています");
+      cameraFallback.hidden = false;
+      fallbackMessage.textContent =
+        "カメラを起動中です。許可ダイアログが出たらアクセスを許可してください。";
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus("このブラウザではカメラを使えません");
+        fallbackMessage.textContent =
+          "このブラウザまたは環境では getUserMedia が使えません。HTTPS または localhost で開いてください。";
         return;
       }
-      arStatus.textContent = "3D表示のみ";
-    }
 
-    function updateSourceLabel(name, kind) {
-      modelName.textContent = name;
-      sourceType.textContent = kind;
-    }
-
-    function clearObjectUrl() {
-      if (currentObjectUrl) {
-        URL.revokeObjectURL(currentObjectUrl);
-        currentObjectUrl = null;
-      }
-    }
-
-    function safeNumber(value, fallback) {
-      return Number.isFinite(value) && value > 0 ? value : fallback;
-    }
-
-    function captureDimensions() {
-      const dims = typeof viewer.getDimensions === "function" ? viewer.getDimensions() : null;
-      const nextDims = dims && typeof dims === "object"
-        ? {
-            width: safeNumber(dims.x * 100, FALLBACK_DIMS.width),
-            height: safeNumber(dims.y * 100, FALLBACK_DIMS.height),
-            depth: safeNumber(dims.z * 100, FALLBACK_DIMS.depth)
-          }
-        : { ...FALLBACK_DIMS };
-
-      currentDims = nextDims;
-      const requestedHeight = Number(heightCm.value) || 15;
-      applyScale(requestedHeight);
-    }
-
-    async function copyCurrentUrl() {
       try {
-        await navigator.clipboard.writeText(location.href);
-        setStatus("URLをコピーしました");
-      } catch (_error) {
-        setStatus("URLコピーに失敗しました");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: currentFacingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+
+        camera.srcObject = stream;
+        cameraStream = stream;
+        cameraLayer.dataset.facing = currentFacingMode;
+        cameraFallback.hidden = true;
+        setStatus(currentFacingMode === "environment" ? "背面カメラ表示中" : "前面カメラ表示中");
+      } catch (error) {
+        const message = error && error.name ? error.name : "CameraError";
+        setStatus("カメラを起動できませんでした");
+        fallbackMessage.textContent =
+          `カメラアクセスに失敗しました (${message})。ブラウザ設定でカメラを許可してから再試行してください。`;
       }
     }
 
-    function loadSampleModel() {
-      clearObjectUrl();
-      viewer.src = DEFAULT_MODEL;
-      updateSourceLabel("sample: model.glb", "同梱モデル");
-      setStatus("同梱サンプルを読み込み中");
-    }
+    function applyOverlayControls() {
+      const size = Number(sizeRange.value);
+      const offsetY = Number(heightRange.value);
+      const yaw = Number(yawRange.value);
+      const spin = Number(spinRange.value);
 
-    fileInput.addEventListener("change", (event) => {
-      const [file] = event.target.files || [];
-      if (!file) {
-        return;
-      }
+      modelAnchor.style.width = `${size}px`;
+      modelAnchor.style.transform = `translate3d(-50%, calc(-50% + ${offsetY}px), 0)`;
+      viewer.cameraOrbit = `${yaw}deg 75deg auto`;
 
-      clearObjectUrl();
-      currentObjectUrl = URL.createObjectURL(file);
-      viewer.src = currentObjectUrl;
-      updateSourceLabel(`local: ${file.name}`, "ローカル読込");
-      setStatus(`${file.name} を読み込み中`);
-    });
-
-    useSample.addEventListener("click", loadSampleModel);
-    copyUrl.addEventListener("click", copyCurrentUrl);
-    applyScaleBtn.addEventListener("click", () => applyScale());
-    fitToModelBtn.addEventListener("click", resetToOriginalSize);
-    resetCamera.addEventListener("click", () => {
-      viewer.cameraOrbit = "0deg 75deg auto";
-      viewer.jumpCameraToGoal();
-    });
-    togglePoster.addEventListener("click", () => {
-      shadowSoft = !shadowSoft;
-      viewer.setAttribute("shadow-intensity", shadowSoft ? "0.4" : "1");
-      togglePoster.textContent = shadowSoft ? "影を戻す" : "影を弱くする";
-    });
-    envSelect.addEventListener("change", () => {
-      viewer.setAttribute("environment-image", envSelect.value);
-    });
-    rotateSelect.addEventListener("change", () => {
-      if (rotateSelect.value === "on") {
+      if (spin > 0) {
         viewer.setAttribute("auto-rotate", "");
+        viewer.setAttribute("rotation-per-second", `${spin}deg`);
       } else {
         viewer.removeAttribute("auto-rotate");
       }
+
+      sizeValue.textContent = `${size}px`;
+      heightValue.textContent = `${offsetY}px`;
+      yawValue.textContent = `${yaw}°`;
+      spinValue.textContent = `${spin}°/s`;
+    }
+
+    function resetOverlayPosition() {
+      sizeRange.value = "260";
+      heightRange.value = "18";
+      yawRange.value = "0";
+      spinRange.value = "10";
+      applyOverlayControls();
+    }
+
+    retryCamera.addEventListener("click", startCamera);
+    flipCamera.addEventListener("click", async () => {
+      currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+      await startCamera();
     });
-    heightCm.addEventListener("change", () => applyScale());
-    heightCm.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        applyScale();
-      }
-    });
+    centerModel.addEventListener("click", resetOverlayPosition);
+
+    sizeRange.addEventListener("input", applyOverlayControls);
+    heightRange.addEventListener("input", applyOverlayControls);
+    yawRange.addEventListener("input", applyOverlayControls);
+    spinRange.addEventListener("input", applyOverlayControls);
 
     viewer.addEventListener("load", () => {
-      captureDimensions();
-      setStatus("モデル読込完了");
+      setStatus(`${statusText.textContent} / モデル読込完了`);
     });
 
     viewer.addEventListener("error", () => {
-      currentDims = { ...FALLBACK_DIMS };
-      updateDimensionCards(15 / currentDims.height);
-      setStatus("モデル読込エラー");
+      setStatus("モデルの読み込みに失敗しました");
+      fallbackMessage.textContent =
+        "固定3Dモデルの読み込みに失敗しました。`model.glb` が同じ場所にあるか確認してください。";
+      cameraFallback.hidden = false;
     });
 
-    updateArStatus();
-    updateDimensionCards(15 / currentDims.height);
+    applyOverlayControls();
+    startCamera();
+
+    window.addEventListener("beforeunload", stopCamera);
   </script>
 </body>
 </html>
