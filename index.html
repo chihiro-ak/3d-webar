@@ -56,9 +56,11 @@
     .surface {
       position: absolute;
       inset: 0;
+      z-index: 2;
       pointer-events: none;
       background:
-        radial-gradient(circle at 50% 72%, rgba(255, 186, 131, 0.16), transparent 16%);
+        radial-gradient(circle at 50% 72%, rgba(255, 186, 131, 0.08), transparent 16%),
+        var(--bg);
     }
 
     .cta-wrap {
@@ -66,12 +68,11 @@
       left: 50%;
       bottom: calc(20px + env(safe-area-inset-bottom, 0px));
       transform: translateX(-50%);
-      z-index: 5;
-      pointer-events: none;
+      z-index: 6;
+      pointer-events: auto;
     }
 
-    #ar-button {
-      pointer-events: auto;
+    #launch-ar {
       border: none;
       border-radius: 999px;
       padding: 14px 22px;
@@ -80,6 +81,17 @@
       color: #fff;
       background: linear-gradient(180deg, #ffb17d 0%, #ff9348 100%);
       box-shadow: 0 14px 28px rgba(255, 147, 72, 0.24);
+    }
+
+    #ar-button {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      border: 0;
+      padding: 0;
+      margin: 0;
     }
 
   </style>
@@ -109,7 +121,17 @@
       max-camera-orbit="auto auto 220%">
       <button slot="ar-button" id="ar-button">ARで見る</button>
     </model-viewer>
-    <div class="cta-wrap" aria-hidden="true"></div>
+    <div class="cta-wrap">
+      <button id="launch-ar" type="button">ARで見る</button>
+    </div>
   </div>
+  <script>
+    const launchButton = document.getElementById("launch-ar");
+    const arButton = document.getElementById("ar-button");
+
+    launchButton.addEventListener("click", () => {
+      arButton.click();
+    });
+  </script>
 </body>
 </html>
