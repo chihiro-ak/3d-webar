@@ -56,11 +56,16 @@
     .surface {
       position: absolute;
       inset: 0;
-      z-index: 2;
+      z-index: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 50% 72%, rgba(255, 186, 131, 0.08), transparent 16%),
+        radial-gradient(circle at 50% 72%, rgba(255, 186, 131, 0.03), transparent 16%),
         var(--bg);
+    }
+
+    model-viewer {
+      position: relative;
+      z-index: 1;
     }
 
     .cta-wrap {
@@ -73,6 +78,9 @@
     }
 
     #launch-ar {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border: none;
       border-radius: 999px;
       padding: 14px 22px;
@@ -81,6 +89,8 @@
       color: #fff;
       background: linear-gradient(180deg, #ffb17d 0%, #ff9348 100%);
       box-shadow: 0 14px 28px rgba(255, 147, 72, 0.24);
+      -webkit-appearance: none;
+      appearance: none;
     }
 
     #ar-button {
