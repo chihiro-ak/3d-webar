@@ -69,11 +69,11 @@
     }
 
     .cta-wrap {
-      position: absolute;
+      position: fixed;
       left: 50%;
       bottom: calc(20px + env(safe-area-inset-bottom, 0px));
       transform: translateX(-50%);
-      z-index: 6;
+      z-index: 999;
       pointer-events: auto;
     }
 
@@ -81,6 +81,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      min-width: 148px;
       border: none;
       border-radius: 999px;
       padding: 14px 22px;
@@ -91,6 +92,7 @@
       box-shadow: 0 14px 28px rgba(255, 147, 72, 0.24);
       -webkit-appearance: none;
       appearance: none;
+      touch-action: manipulation;
     }
 
     #ar-button {
